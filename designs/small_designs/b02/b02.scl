@@ -1,0 +1,47 @@
+NumRows : 5
+
+CoreRow Horizontal
+	 Coordinate : 	 0.0
+	 Height : 	 7.92
+	 Sitewidth : 	 1
+	 Sitespacing : 	 1
+	 Siteorient : 	 -
+	 Sitesymmetry : 	 Y
+	 SubrowOrigin : 	 0.0 	 Numsites : 	 42.34383071948026
+End
+CoreRow Horizontal
+	 Coordinate : 	 7.92
+	 Height : 	 7.92
+	 Sitewidth : 	 1
+	 Sitespacing : 	 1
+	 Siteorient : 	 -
+	 Sitesymmetry : 	 Y
+	 SubrowOrigin : 	 0.0 	 Numsites : 	 42.34383071948026
+End
+CoreRow Horizontal
+	 Coordinate : 	 15.84
+	 Height : 	 7.92
+	 Sitewidth : 	 1
+	 Sitespacing : 	 1
+	 Siteorient : 	 -
+	 Sitesymmetry : 	 Y
+	 SubrowOrigin : 	 0.0 	 Numsites : 	 42.34383071948026
+End
+CoreRow Horizontal
+	 Coordinate : 	 23.759999999999998
+	 Height : 	 7.92
+	 Sitewidth : 	 1
+	 Sitespacing : 	 1
+	 Siteorient : 	 -
+	 Sitesymmetry : 	 Y
+	 SubrowOrigin : 	 0.0 	 Numsites : 	 42.34383071948026
+End
+CoreRow Horizontal
+	 Coordinate : 	 31.68
+	 Height : 	 7.92
+	 Sitewidth : 	 1
+	 Sitespacing : 	 1
+	 Siteorient : 	 -
+	 Sitesymmetry : 	 Y
+	 SubrowOrigin : 	 0.0 	 Numsites : 	 42.34383071948026
+End

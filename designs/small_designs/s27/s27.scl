@@ -1,0 +1,29 @@
+NumRows : 3
+
+CoreRow Horizontal
+	 Coordinate : 	 0.0
+	 Height : 	 7.92
+	 Sitewidth : 	 1
+	 Sitespacing : 	 1
+	 Siteorient : 	 -
+	 Sitesymmetry : 	 Y
+	 SubrowOrigin : 	 0.0 	 Numsites : 	 30.166206257996713
+End
+CoreRow Horizontal
+	 Coordinate : 	 7.92
+	 Height : 	 7.92
+	 Sitewidth : 	 1
+	 Sitespacing : 	 1
+	 Siteorient : 	 -
+	 Sitesymmetry : 	 Y
+	 SubrowOrigin : 	 0.0 	 Numsites : 	 30.166206257996713
+End
+CoreRow Horizontal
+	 Coordinate : 	 15.84
+	 Height : 	 7.92
+	 Sitewidth : 	 1
+	 Sitespacing : 	 1
+	 Siteorient : 	 -
+	 Sitesymmetry : 	 Y
+	 SubrowOrigin : 	 0.0 	 Numsites : 	 30.166206257996713
+End

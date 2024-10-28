@@ -1,4 +1,5 @@
 import random
+import os
 from copy import deepcopy
 import time
 import matplotlib.pyplot as plt
@@ -69,8 +70,8 @@ def parse_nodes(file_path):
                 parts = line.split()
                 if len(parts) >= 3:
                     name = parts[0]
-                    width = int(parts[1])
-                    height = int(parts[2])
+                    width = float(parts[1])
+                    height = float(parts[2])
                     nodes.append(Module(name, width, height))
     print("Node parsing complete")
     return nodes
@@ -115,13 +116,13 @@ def parse_shelves(file_path):
                         #print("Part: ", parts[i])
                         parts[i].strip()
                     #print("Parts after: ", parts)
-                    width = int(parts[2])
+                    width = float(parts[2])
                     
                 elif data_row == 2:
                     parts = line.split(":")
                     for part in parts:
                         part.strip()
-                    height = int(parts[1])
+                    height = float(parts[1])
                 else:
                     continue
     print("Shelf parsing complete! Found", len(shelves), "shelves")
@@ -272,29 +273,29 @@ def visualize_row_based_design(shelves):
     plt.show()
 
 
-# def genetic_algorithm(modules, shelves, nets, population_size=50, generations=100):
-#     # Initialize population with random orders
-#     population = [random.sample(range(len(modules)), len(modules)) for _ in range(population_size)]
-#     for generation in range(generations):
-#         # Sort population by HPWL-based fitness
-#         population = sorted(population, key=lambda chrom: fitness(chrom, modules, nets, shelves))
-#         # Create next generation
-#         next_generation = population[:2]  # Elitism: carry over top 2 individuals
-#         while len(next_generation) < population_size:
-#             parent1, parent2 = random.sample(population[:5], 2)  # Select from top 5 individuals
-#             child = crossover(parent1, parent2)
-#             if random.random() < 0.1:  # 10% chance to mutate
-#                 child = mutate(child)
-#             next_generation.append(child)
-#         population = next_generation
-#         # Print the best fitness (HPWL) in each generation
-#         best_fitness = fitness(population[0], modules, nets, shelves)
-#         print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
+def genetic_algorithm(modules, shelves, nets, population_size=50, generations=100):
+    # Initialize population with random orders
+    population = [random.sample(range(len(modules)), len(modules)) for _ in range(population_size)]
+    for generation in range(generations):
+        # Sort population by HPWL-based fitness
+        population = sorted(population, key=lambda chrom: fitness(chrom, modules, nets, shelves))
+        # Create next generation
+        next_generation = population[:2]  # Elitism: carry over top 2 individuals
+        while len(next_generation) < population_size:
+            parent1, parent2 = random.sample(population[:5], 2)  # Select from top 5 individuals
+            child = crossover(parent1, parent2)
+            if random.random() < 0.1:  # 10% chance to mutate
+                child = mutate(child)
+            next_generation.append(child)
+        population = next_generation
+        # Print the best fitness (HPWL) in each generation
+        best_fitness = fitness(population[0], modules, nets, shelves)
+        print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
         
-#         # Visualize the row-based design after each generation
-#         #visualize_row_based_design(shelves)
+        # Visualize the row-based design after each generation
+        #visualize_row_based_design(shelves)
         
-#     return create_individual(modules, shelves, population[0])
+    return create_individual(modules, shelves, population[0])
 
 def csex_crossover(parent1, parent2):
     """
@@ -376,8 +377,10 @@ def genetic_algorithm(modules, shelves, nets, population_size=50, generations=30
 # Visualization and other helper functions remain the same...
 
 # Paths to the files
-subdirectory = "ibm01/"
-aux_file = "ibm01.aux"
+subdirectory = "designs/small_designs/b01/"
+for file in os.listdir(subdirectory):
+    if file.endswith(".aux"):
+        aux_file = file
 
 # Parse filenames, modules, shelves, and nets
 filenames = filenames_parser(subdirectory + aux_file)  # .nodes, .nets, .wts, .pl, .scl (Always in this order)
@@ -409,22 +412,3 @@ plot_fitness_progress(fitness_progress)
 # Output the best solution
 for module in best_solution:
     print(module)
-
-
-# Paths to the files
-subdirectory = "ibm01/"
-aux_file = "ibm01.aux"
-
-# Parse filenames, modules, shelves, and nets
-filenames = filenames_parser(subdirectory + aux_file) #.nodes .nets .wts .pl .scl Always in this order
-modules = parse_nodes(subdirectory + filenames[0])
-shelves = parse_shelves(subdirectory + filenames[4])
-nets = parse_nets(subdirectory + filenames[1])
-
-# Run the genetic algorithm
-start_time = time.time()
-best_solution = genetic_algorithm(modules, shelves, nets)
-print(f"Execution time: {time.time() - start_time:.2f}s")
-
-# Visualize the row-based design
-visualize_row_based_design(shelves)

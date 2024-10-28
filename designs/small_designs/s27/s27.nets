@@ -1,0 +1,85 @@
+NetDegree : 4 n0
+	c0
+	c2
+	c5
+	c19
+NetDegree : 2 n1
+	c13
+	c20
+NetDegree : 4 n2
+	c3
+	c9
+	c14
+	c21
+NetDegree : 2 n3
+	c10
+	c22
+NetDegree : 2 n4
+	c6
+	c23
+NetDegree : 2 n5
+	c17
+	c24
+NetDegree : 4 n6
+	c3
+	c4
+	c15
+	c25
+NetDegree : 2 n7
+	c0
+	c16
+NetDegree : 2 n8
+	c2
+	c12
+NetDegree : 2 n9
+	c5
+	c11
+NetDegree : 2 n10
+	c8
+	c11
+NetDegree : 2 n11
+	c8
+	c10
+NetDegree : 3 n12
+	c9
+	c12
+	c14
+NetDegree : 2 n13
+	c9
+	c18
+NetDegree : 3 n14
+	c7
+	c8
+	c18
+NetDegree : 2 n15
+	c6
+	c7
+NetDegree : 2 n16
+	c5
+	c6
+NetDegree : 2 n17
+	c2
+	c4
+NetDegree : 2 n18
+	c1
+	c3
+NetDegree : 4 n19
+	c0
+	c2
+	c5
+	c13
+NetDegree : 2 n20
+	c0
+	c1
+NetDegree : 2 n21
+	c14
+	c17
+NetDegree : 2 n22
+	c16
+	c17
+NetDegree : 2 n23
+	c15
+	c16
+NetDegree : 2 n24
+	c15
+	c18

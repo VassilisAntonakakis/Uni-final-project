@@ -1,0 +1,344 @@
+NetDegree : 5 n0
+	c42
+	c49
+	c59
+	c60
+	c86
+NetDegree : 5 n1
+	c40
+	c49
+	c59
+	c60
+	c87
+NetDegree : 2 n2
+	c41
+	c88
+NetDegree : 6 n3
+	c0
+	c1
+	c2
+	c3
+	c11
+	c89
+NetDegree : 2 n4
+	c2
+	c90
+NetDegree : 2 n5
+	c11
+	c91
+NetDegree : 2 n6
+	c35
+	c44
+NetDegree : 2 n7
+	c38
+	c42
+NetDegree : 2 n8
+	c38
+	c40
+NetDegree : 4 n9
+	c39
+	c63
+	c76
+	c77
+NetDegree : 2 n10
+	c32
+	c37
+NetDegree : 2 n11
+	c33
+	c36
+NetDegree : 2 n12
+	c30
+	c35
+NetDegree : 2 n13
+	c24
+	c34
+NetDegree : 4 n14
+	c33
+	c63
+	c76
+	c77
+NetDegree : 4 n15
+	c31
+	c46
+	c50
+	c51
+NetDegree : 4 n16
+	c27
+	c32
+	c82
+	c83
+NetDegree : 6 n17
+	c26
+	c43
+	c46
+	c48
+	c50
+	c51
+NetDegree : 7 n18
+	c27
+	c28
+	c39
+	c45
+	c67
+	c82
+	c83
+NetDegree : 3 n19
+	c25
+	c28
+	c73
+NetDegree : 2 n20
+	c12
+	c24
+NetDegree : 3 n21
+	c23
+	c26
+	c74
+NetDegree : 2 n22
+	c23
+	c61
+NetDegree : 2 n23
+	c15
+	c22
+NetDegree : 2 n24
+	c7
+	c21
+NetDegree : 3 n25
+	c20
+	c27
+	c72
+NetDegree : 2 n26
+	c6
+	c20
+NetDegree : 6 n27
+	c19
+	c34
+	c38
+	c74
+	c84
+	c85
+NetDegree : 2 n28
+	c7
+	c19
+NetDegree : 2 n29
+	c12
+	c18
+NetDegree : 2 n30
+	c11
+	c17
+NetDegree : 2 n31
+	c10
+	c16
+NetDegree : 2 n32
+	c9
+	c15
+NetDegree : 2 n33
+	c7
+	c14
+NetDegree : 3 n34
+	c10
+	c13
+	c25
+NetDegree : 2 n35
+	c5
+	c13
+NetDegree : 2 n36
+	c4
+	c12
+NetDegree : 2 n37
+	c7
+	c10
+NetDegree : 2 n38
+	c8
+	c9
+NetDegree : 2 n39
+	c6
+	c8
+NetDegree : 2 n40
+	c3
+	c7
+NetDegree : 2 n41
+	c1
+	c6
+NetDegree : 2 n42
+	c2
+	c5
+NetDegree : 2 n43
+	c0
+	c4
+NetDegree : 6 n44
+	c0
+	c1
+	c2
+	c3
+	c11
+	c41
+NetDegree : 2 n45
+	c26
+	c30
+NetDegree : 3 n46
+	c22
+	c47
+	c48
+NetDegree : 3 n47
+	c46
+	c47
+	c57
+NetDegree : 2 n48
+	c46
+	c75
+NetDegree : 6 n49
+	c15
+	c27
+	c49
+	c52
+	c73
+	c75
+NetDegree : 3 n50
+	c17
+	c50
+	c56
+NetDegree : 2 n51
+	c22
+	c51
+NetDegree : 4 n52
+	c10
+	c16
+	c18
+	c52
+NetDegree : 3 n53
+	c53
+	c54
+	c67
+NetDegree : 2 n54
+	c28
+	c53
+NetDegree : 2 n55
+	c56
+	c57
+NetDegree : 2 n56
+	c59
+	c60
+NetDegree : 4 n57
+	c58
+	c59
+	c61
+	c62
+NetDegree : 2 n58
+	c56
+	c58
+NetDegree : 2 n59
+	c55
+	c56
+NetDegree : 2 n60
+	c55
+	c61
+NetDegree : 2 n61
+	c5
+	c55
+NetDegree : 2 n62
+	c13
+	c62
+NetDegree : 3 n63
+	c20
+	c24
+	c63
+NetDegree : 3 n64
+	c64
+	c84
+	c85
+NetDegree : 4 n65
+	c13
+	c19
+	c29
+	c64
+NetDegree : 3 n66
+	c48
+	c53
+	c66
+NetDegree : 6 n67
+	c31
+	c35
+	c65
+	c66
+	c68
+	c69
+NetDegree : 3 n68
+	c29
+	c67
+	c68
+NetDegree : 7 n69
+	c29
+	c31
+	c36
+	c37
+	c48
+	c54
+	c70
+NetDegree : 2 n70
+	c72
+	c73
+NetDegree : 3 n71
+	c14
+	c72
+	c74
+NetDegree : 2 n72
+	c71
+	c72
+NetDegree : 2 n73
+	c71
+	c75
+NetDegree : 2 n74
+	c4
+	c71
+NetDegree : 3 n75
+	c36
+	c37
+	c65
+NetDegree : 2 n76
+	c21
+	c76
+NetDegree : 2 n77
+	c61
+	c77
+NetDegree : 2 n78
+	c58
+	c78
+NetDegree : 3 n79
+	c9
+	c18
+	c79
+NetDegree : 4 n80
+	c21
+	c67
+	c78
+	c79
+NetDegree : 2 n81
+	c57
+	c80
+NetDegree : 2 n82
+	c16
+	c81
+NetDegree : 2 n83
+	c80
+	c82
+NetDegree : 2 n84
+	c81
+	c83
+NetDegree : 2 n85
+	c75
+	c84
+NetDegree : 2 n86
+	c9
+	c85
+NetDegree : 2 n87
+	c0
+	c69
+NetDegree : 3 n88
+	c3
+	c44
+	c70
+NetDegree : 4 n89
+	c1
+	c29
+	c43
+	c45
