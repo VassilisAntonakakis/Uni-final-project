@@ -1,112 +1,75 @@
-# class Shelf:
-#     def __init__(self, width, height):
-#         self.width = width
-#         self.height = height
-#         self.spaceLeft = width
-#         self.nodes = []
-    
-#     def addNode(self, node):
-#         self.nodes.append(node)
-#         self.spaceLeft -= node.getWidth()
-        
-# class Bookshelf:
-#     def __init__(self, rows):
-#             self.shelves = [rows]
-    
-#     def addShelf(self, shelf):
-#         self.shelves.append(shelf)
-    
-#     def addNode(self, node):
-#         pass
-
-import re
-import sys
-
 class Shelf:
-    def __init__(self, coordinate, height, sitewidth, sitespacing, siteorient, sitesymmetry, subrow_origin, num_sites):
-        self._coordinate = int(coordinate)
-        self._height = int(height)
-        self._sitewidth = int(sitewidth)
-        self._sitespacing = int(sitespacing)
-        self._siteorient = siteorient.strip()
-        self._sitesymmetry = sitesymmetry.strip() == 'Y'
-        self._subrow_origin = int(subrow_origin)
-        self._num_sites = int(num_sites)
+    def __init__(self, height, max_width, name):
+        self.name = name
+        self.height = height
+        self.max_width = max_width
+        self.used_width = 0
+        self.contained_modules = []
+        
+    def add_module(self, module):
+        self.contained_modules.append(module)
+        self.used_width += module.width
+    
+    def reset_shelf(self):
+        self.used_width = 0
+        self.contained_modules.clear()
+    
+    def add_module_to_shelf(self, module):
+        # If there is space available in the shelf
+            x = self.find_space(module.width)
+            if x is not None:
+                print(f"Found space at {x} in shelf {self.name} for module {module.name}")
+                module.x = x
+                #module.y = sum([s.height for s in shelves if s != self]) + (self.height - module.height) / 2
+                self.insert_module(module, x)
+                self.check_module_overlap()
+                print(f"Placed module {module.name} at ({module.x}, {module.y}) on shelf {self.name}\n {self.contained_modules}")
+                return True
+                #shelf.check_module_overlap()
+            else:
+                # If no space was found in any shelf
+                print(f"Warning: Could not place module {module.name} due to size constraints.")
+                return False
+    
+    def insert_module(self, module, x):
+        # Insert a module in the contained modules list at the correct position based on x-coordinate
+        index = 0
+        while index < len(self.contained_modules) and ((self.contained_modules[index].x + self.contained_modules[index].width) <= x):
+            index += 1
+        if index < len(self.contained_modules):
+            self.contained_modules.insert(index, module)
+        elif index == len(self.contained_modules):
+            self.contained_modules.append(module)
+        else:
+            print("Warning: Module not inserted at correct index!")
+        
+    def check_module_overlap(self):
+        # Check if any modules in the shelf overlap with each other
+        previous_x = 0
+        for module in self.contained_modules:
+            if module.x < previous_x:
+                print(f"Warning: Module {module.name} overlaps with previous module(s) in the shelf!")
+                return True
+            previous_x = module.x + module.width
+        return False
+    
+    def find_space(self, size_needed):
+        # Find the first available space in the shelf to place a module of the given size
+        previous_x = self.contained_modules[0].width if self.contained_modules else 0
+        index = 1
+        while index < len(self.contained_modules):
+            module = self.contained_modules[index]
+            space = module.x - previous_x
+            if space >= size_needed:
+                return previous_x
+            previous_x = module.x + module.width
+            index += 1
+        
+        # Check the remaining space after the last module
+        remaining_space = self.max_width - previous_x
+        if remaining_space >= size_needed:
+            return previous_x
+        return None
 
-    # Getter and Setter for Coordinate
-    @property
-    def coordinate(self):
-        return self._coordinate
-    
-    @coordinate.setter
-    def coordinate(self, value):
-        self._coordinate = int(value)
-    
-    # Getter and Setter for Height
-    @property
-    def height(self):
-        return self._height
-    
-    @height.setter
-    def height(self, value):
-        self._height = int(value)
-
-    # Getter and Setter for Sitewidth
-    @property
-    def sitewidth(self):
-        return self._sitewidth
-    
-    @sitewidth.setter
-    def sitewidth(self, value):
-        self._sitewidth = int(value)
-    
-    # Getter and Setter for Sitespacing
-    @property
-    def sitespacing(self):
-        return self._sitespacing
-    
-    @sitespacing.setter
-    def sitespacing(self, value):
-        self._sitespacing = int(value)
-    
-    # Getter and Setter for Siteorient
-    @property
-    def siteorient(self):
-        return self._siteorient
-    
-    @siteorient.setter
-    def siteorient(self, value):
-        self._siteorient = value.strip()
-    
-    # Getter and Setter for Sitesymmetry
-    @property
-    def sitesymmetry(self):
-        return self._sitesymmetry
-    
-    @sitesymmetry.setter
-    def sitesymmetry(self, value):
-        self._sitesymmetry = value.strip() == 'Y'
-    
-    # Getter and Setter for SubrowOrigin
-    @property
-    def subrow_origin(self):
-        return self._subrow_origin
-    
-    @subrow_origin.setter
-    def subrow_origin(self, value):
-        self._subrow_origin = int(value)
-    
-    # Getter and Setter for NumSites
-    @property
-    def num_sites(self):
-        return self._num_sites
-    
-    @num_sites.setter
-    def num_sites(self, value):
-        self._num_sites = int(value)
-    
-    def __str__(self):
-        return (f"Shelf(Coordinate={self.coordinate}, Height={self.height}, "
-                f"Sitewidth={self.sitewidth}, Sitespacing={self.sitespacing}, "
-                f"Siteorient='{self.siteorient}', Sitesymmetry={self.sitesymmetry}, "
-                f"SubrowOrigin={self.subrow_origin}, NumSites={self.num_sites})")
+    def __repr__(self):
+        return f"Shelf(height={self.height}, max_width={self.max_width}, used_width={self.used_width})"
