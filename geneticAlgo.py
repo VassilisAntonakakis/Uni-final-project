@@ -273,7 +273,7 @@ def calculate_hpwl(modules, nets):
                 min_y = min(min_y, module.y)
                 max_y = max(max_y, module.y)
             else:
-                print(f"Warning: Module {module_name} not found in module list!")
+                pass#print(f"Warning: Module {module_name} not found in module list!")
 
         # Calculate HPWL for this net
         hpwl = (max_x - min_x) + (max_y - min_y)
@@ -288,163 +288,59 @@ def reset_shelves(shelves):
 
 # Modified fitness function to use HPWL
 def fitness(chromosome, modules, nets, shelves):
-    # Create individual based on the chromosome order
+    # Reset shelves to start fresh for each chromosome evaluation
+    reset_shelves(shelves)
     individual = create_individual(modules, shelves, chromosome)
     if individual is None:
         return float('inf')  # Penalize if placement failed
-    # Calculate the total HPWL for this individual placement
+    # Calculate HPWL for this placement
     hpwl = calculate_hpwl(individual, nets)
-    return hpwl  # Lower HPWL is better
+    return hpwl
+
+def mutate(chromosome, mutation_rate=0.2):
+    """Applies mutation to the chromosome based on the mutation rate."""
+    for i in range(len(chromosome)):
+        if random.random() < mutation_rate:
+            swap_idx = random.randint(0, len(chromosome) - 1)
+            chromosome[i], chromosome[swap_idx] = chromosome[swap_idx], chromosome[i]
+    return chromosome
+
+def plot_fitness_progress(fitness_progress):
+    plt.figure()
+    plt.plot(fitness_progress, marker='o')
+    plt.title("HPWL Fitness Over Generations")
+    plt.xlabel("Generation")
+    plt.ylabel("Best HPWL (Lower is Better)")
+    plt.grid(True)
+    plt.show()
 
 # Genetic algorithm functions
 def create_individual(modules, shelves, chromosome):
-    modules_copy = deepcopy(modules)  # Avoid modifying the original modules list
-    reset_shelves(shelves)  # Reset shelves before creating a new individual
+    modules_copy = deepcopy(modules)
+    reset_shelves(shelves)
     individual = []
-    current_shelf = 0
+
     for module_index in chromosome:
         module = modules_copy[module_index]
         placed = False
-        # Try placing the module on existing shelves
-        while not placed and current_shelf < len(shelves):
-            shelf = shelves[current_shelf]
-            if shelf.used_width + module.width <= shelf.max_width and module.height <= shelf.height:
-                # Place the module
-                module.x = shelf.used_width
-                module.y = sum(s.height for s in shelves[:current_shelf])
-                shelf.used_width += module.width
-                shelf.add_module(module)
+
+        for shelf in shelves:
+            if shelf.add_module_to_shelf(module):
                 individual.append(module)
-                #print(f"Placed module {module.name} at ({module.x}, {module.y}) on shelf {current_shelf}") 
                 placed = True
-            else:
-                # Move to the next shelf
-                current_shelf += 1
-        
+                break
+
         if not placed:
-            #print(f"Warning: Could not place module {module.name} due to size constraints.")
-            return None  # Return None if placement fails
+            #print(f"Failed to place module {module.name}")
+            return None
 
     return individual
 
-def mutate(chromosome):
-    # Select two random genes and swap their positions
-    idx1, idx2 = random.sample(range(len(chromosome)), 2)
-    chromosome[idx1], chromosome[idx2] = chromosome[idx2], chromosome[idx1]
-    return chromosome
-
-def crossover(parent1, parent2):
-    # Perform crossover between two parents to create a child
-    crossover_point = random.randint(1, len(parent1) - 1)
-    child = parent1[:crossover_point] + [gene for gene in parent2 if gene not in parent1[:crossover_point]]
-    return child
-
-def genetic_algorithm(modules, shelves, nets, population_size=50, generations=100):
-    # Initialize population with random orders
-    population = [random.sample(range(len(modules)), len(modules)) for _ in range(population_size)]
-    for generation in range(generations):
-        # Sort population by HPWL-based fitness
-        population = sorted(population, key=lambda chrom: fitness(chrom, modules, nets, shelves))
-        # Create next generation
-        next_generation = population[:2]  # Elitism: carry over top 2 individuals
-        while len(next_generation) < population_size:
-            parent1, parent2 = random.sample(population[:5], 2)  # Select from top 5 individuals
-            child = crossover(parent1, parent2)
-            if random.random() < 0.1:  # 10% chance to mutate
-                child = mutate(child)
-            next_generation.append(child)
-        population = next_generation
-        # Print the best fitness (HPWL) in each generation
-        best_fitness = fitness(population[0], modules, nets, shelves)
-        print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
-        
-        # Visualize the row-based design after each generation
-        #visualize_row_based_design(shelves)
-        
-    return create_individual(modules, shelves, population[0])
-
-def csex_crossover(parent1, parent2):
-    """
-    Complete Subtour Exchange Crossover (CSEX) for the placement problem.
-    This function exchanges subtours between two parent chromosomes to produce offspring.
-    """
-    size = len(parent1)
-
-    # Select random subtour indices for both parents
-    start1, end1 = sorted(random.sample(range(size), 2))
-    start2, end2 = sorted(random.sample(range(size), 2))
-
-    # Extract subtours from both parents
-    subtour1 = parent1[start1:end1+1]
-    subtour2 = parent2[start2:end2+1]
-
-    # Create offspring
-    child1 = [None] * size
-    child2 = [None] * size
-
-    # Copy subtours to children
-    child1[start1:end1+1] = subtour2
-    child2[start2:end2+1] = subtour1
-
-    # Fill remaining positions in child1
-    pos = 0
-    for gene in parent1:
-        if gene not in subtour2:
-            while pos < size and child1[pos] is not None:
-                pos += 1
-            if pos < size:
-                child1[pos] = gene
-
-    # Fill remaining positions in child2
-    pos = 0
-    for gene in parent2:
-        if gene not in subtour1:
-            while pos < size and child2[pos] is not None:
-                pos += 1
-            if pos < size:
-                child2[pos] = gene
-
-    return child1, child2
-
-# def genetic_algorithm(modules, shelves, nets, population_size=50, generations=30):
-#     # Initialize population with random orders
-#     population = [random.sample(range(len(modules)), len(modules)) for _ in range(population_size)]
-#     best_fitness_per_generation = []
-
-#     for generation in range(generations):
-#         # Sort population by HPWL-based fitness
-#         population = sorted(population, key=lambda chrom: fitness(chrom, modules, nets, shelves))
-
-#         # Create next generation
-#         next_generation = population[:2]  # Elitism: carry over top 2 individuals
-#         while len(next_generation) < population_size:
-#             parent1, parent2 = random.sample(population[:5], 2)  # Select from top 5 individuals
-#             child1, child2 = csex_crossover(parent1, parent2)  # Use CSEX crossover
-#             if random.random() < 0.1:  # 10% chance to mutate
-#                 child1 = mutate(child1)
-#                 child2 = mutate(child2)
-#             next_generation.append(child1)
-#             if len(next_generation) < population_size:
-#                 next_generation.append(child2)
-
-#         population = next_generation
-
-#         # Print the best fitness (HPWL) in each generation
-#         best_fitness = fitness(population[0], modules, nets, shelves)
-#         best_fitness_per_generation.append(best_fitness)
-#         print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
-
-#         # Visualize the row-based design after each generation
-#         visualize_row_based_design(shelves)
-#         time.sleep(0.5)  # Optional: pause for 0.5 seconds to see the update clearly
-
-#     return create_individual(modules, shelves, population[0]), best_fitness_per_generation
 
 def starting_placement(modules, shelves):
-    PERCENTAGE = 0.60
-    
+    PERCENTAGE = 1    
     #select a random 80% of the modules to place excluding the terminals
-    modulesToPlace = random.sample([module for module in modules if not module.terminal], int(len(modules) * PERCENTAGE))
+    #modulesToPlace = random.sample([module for module in modules if not module.terminal], int(len(modules) * PERCENTAGE))
     
     # Simple placement algorithm to place modules row by row
     for module in modules:
@@ -464,12 +360,12 @@ def starting_placement(modules, shelves):
             #return None  # Return None if placement fails
             pass
     
-    #remove a percentage of random modules from the shelves
-    for module in modulesToPlace:
-       for shelf in shelves:
-           if module in shelf.contained_modules:
-               shelf.contained_modules.remove(module)
-               shelf.used_width -= module.width
+    # #remove a percentage of random modules from the shelves
+    # for module in modulesToPlace:
+    #    for shelf in shelves:
+    #        if module in shelf.contained_modules:
+    #            shelf.contained_modules.remove(module)
+    #            shelf.used_width -= module.width
     
     
     #for each shelf in the shelves, print the space utilization percentage
@@ -536,29 +432,74 @@ def place_modules_in_shelves(modules, shelves, chromosome, letters_per_mapping):
     # Return updated modules with placement
     return modules
 
-def reset_shelves(shelves, modules):
-    # Find all modules contained in the modules parameter and remove them from the shelves
-    for shelf in shelves:
-        for module in shelf.contained_modules:
-            if module in modules:
-                shelf.contained_modules.remove(module)
-                shelf.used_width -= module.width
+# def reset_shelves(shelves, modules):
+#     # Find all modules contained in the modules parameter and remove them from the shelves
+#     for shelf in shelves:
+#         shelf.contained_modules = []
+#         # for module in shelf.contained_modules:
+#         #     if module in modules:
+#         #         shelf.contained_modules.remove(module)
+#         #         shelf.used_width -= module.width
 
-def perform_PMX_crossover(parent1, parent2):
-    # Select two random crossover points
+def pmx_crossover(parent1, parent2):
     size = len(parent1)
+
+    # Step 1: Select two crossover points
     point1, point2 = sorted(random.sample(range(size), 2))
-    
-    # Initialize the child chromosomes with the parent genes
-    child1 = parent1[:]
-    return child1
-        
-def gene_decoding(s):
-    base = 26
-    result = 0
-    for char in s:
-        result = result * base + (ord(char) - ord('A'))
-    return result
+
+    # Step 2: Initialize children with None to mark empty spots
+    child1, child2 = [None] * size, [None] * size
+
+    # Step 3: Copy the crossover segment from each parent to the respective child
+    child1[point1:point2 + 1] = parent1[point1:point2 + 1]
+    child2[point1:point2 + 1] = parent2[point1:point2 + 1]
+
+    # Step 4: Map and fill in the missing genes
+    def fill_child(child, other_parent, point1, point2):
+        for i in range(size):
+            if child[i] is None:  # Only fill if slot is empty
+                gene = other_parent[i]
+
+                # Resolve any conflicts using mapping
+                while gene in child[point1:point2 + 1]:  # Check if gene is already in crossover segment
+                    gene = other_parent[child[point1:point2 + 1].index(gene) + point1]
+
+                child[i] = gene
+
+    # Fill the rest of the children
+    fill_child(child1, parent2, point1, point2)
+    fill_child(child2, parent1, point1, point2)
+
+    return child1, child2
+    # def pmx_crossover(parent1, parent2):
+    #     size = len(parent1)
+    #     # Step 1: Select two crossover points
+    #     point1, point2 = sorted(random.sample(range(size), 2))
+
+    #     # Step 2: Initialize children with None to mark empty spots
+    #     child1, child2 = [None] * size, [None] * size
+
+    #     # Step 3: Copy the crossover segment from each parent to the respective child
+    #     child1[point1:point2+1] = parent2[point1:point2+1]
+    #     child2[point1:point2+1] = parent1[point1:point2+1]
+
+    #     # Step 4: Define helper function to map genes and avoid conflicts
+    #     def map_gene(gene, child, other_parent, point1, point2):
+    #         while gene in child[point1:point2+1]:
+    #             gene = other_parent[child.index(gene)]
+    #         return gene
+
+    #     # Step 5: Fill remaining positions in child1
+    #     for i in range(size):
+    #         if child1[i] is None:
+    #             child1[i] = map_gene(parent1[i], child1, parent2, point1, point2)
+
+    #     # Step 6: Fill remaining positions in child2
+    #     for i in range(size):
+    #         if child2[i] is None:
+    #             child2[i] = map_gene(parent2[i], child2, parent1, point1, point2)
+
+    #     return child1, child2
 
 def split_string(s, length):
     parts = []
@@ -599,46 +540,96 @@ def visualize_row_based_design(shelves):
     ax.xaxis.set_tick_params(labelbottom=False)
     ax.yaxis.set_tick_params(labelleft=False)
     plt.show()
+    
+def gene_decoding(s):
+    base = 26
+    result = 0
+    for char in s:
+        result = result * base + (ord(char) - ord('A'))
+    return result
+
+def genetic_algorithm(modules, shelves, nets):
+    MUTATION_RATE = 0.5
+    # Initialize population with random orders
+    population = [random.sample(range(len(modules)), len(modules)) for _ in range(INITIAL_POP)]
+    best_fitness_per_generation = []
+
+    for generation in range(GENERATIONS):
+        print(f"==========================Generation {generation}==========================\n")
+        # Evaluate fitness for the population
+        fitness_values = [fitness(chrom, modules, nets, shelves) for chrom in population]
+        population = [chrom for _, chrom in sorted(zip(fitness_values, population))]
+
+        # Maintain elite individuals
+        elite_size = int(0.1 * INITIAL_POP)
+        next_generation = population[:elite_size]
+
+        # Generate new individuals
+        while len(next_generation) < INITIAL_POP:
+            parent1 = roulette_wheel_selection(population, fitness_values)
+            parent2 = roulette_wheel_selection(population, fitness_values)
+            #print(f"Parent1: {parent1}, Parent2: {parent2}")
+            child1, child2 = pmx_crossover(parent1, parent2)
+            
+            if random.random() < MUTATION_RATE:  # Mutation chance
+                child1 = mutate(child1)
+            if random.random() < MUTATION_RATE:
+                child2 = mutate(child2)
+            
+            next_generation.append(child1)
+            if len(next_generation) < INITIAL_POP:
+                next_generation.append(child2)
+
+        # Update population
+        population = next_generation
+
+        # Track best fitness
+        best_fitness = fitness(population[0], modules, nets, shelves)
+        best_fitness_per_generation.append(best_fitness)
+        print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
+        #visualize_row_based_design(shelves)
+
+    return create_individual(modules, shelves, population[0]), best_fitness_per_generation
+
+def roulette_wheel_selection(population, fitness_values):
+    total_fitness = sum(1.0 / f for f in fitness_values if f != float('inf'))
+    if total_fitness == 0:
+        return random.choice(population)  # Fallback in case of all invalid fitness values
+
+    pick = random.uniform(0, total_fitness)
+    current = 0
+    for individual, fitness in zip(population, fitness_values):
+        if fitness != float('inf'):
+            current += 1.0 / fitness
+            if current > pick:
+                return individual
+    return random.choice(population)  # Fallback in case of rounding issues
 
 if __name__ == "__main__":
-    # Visualization and other helper functions remain the same...
-
+    # Constants
+    INITIAL_POP = 2000
+    GENERATIONS = 1000
+    
     # Paths to the files
     small_designs = "designs/small_designs/"
-    subdirectory = small_designs + "b01/" #"designs/ibm01/"
+    subdirectory = small_designs + "b01/"
     for file in os.listdir(subdirectory):
         if file.endswith(".aux"):
             aux_file = file
+
     parsing_start_time = time.time()
-    # Parse filenames, modules, shelves, and nets
-    filenames = filenames_parser(subdirectory + aux_file)  # .nodes, .nets, .wts, .pl, .scl (Always in this order)
+    filenames = filenames_parser(subdirectory + aux_file)  # .nodes, .nets, .wts, .pl, .scl
     modules = parse_nodes(subdirectory + filenames[0])
     shelves = parse_shelves(subdirectory + filenames[4])
     nets = parse_custom_nets(subdirectory + filenames[1])
     parsing_end_time = time.time()
-    print("Nets found: ", len(nets))
-    # Run the genetic algorithm with CSEX
-    
-    # for module in modules:
-    #     print(module)
-    
+    #print("Nets found: ", len(nets))
+
     placement_start_time = time.time()
-    #best_solution, fitness_progress = genetic_algorithm(modules, shelves, nets)
     modules_removed = starting_placement(modules, shelves)
     #visualize_row_based_design(shelves)
     mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-    #print(f"Letters per mapping: {letters_per_mapping}\nMapping: {mapping}")
-    initial_population = create_initial_population(mapping, 100)
-    #child1, child2 = perform_PMX_crossover(initial_population[0], initial_population[1])
-    #print(f"Parent chromosomes: {initial_population[0]}\n{initial_population[1]}\nChild chromosomes: {child1}\n{child2}")
-    for chromosome in initial_population:
-        hpwl = 0
-        modules_placed = place_modules_in_shelves(deepcopy(modules_removed), shelves, chromosome, letters_per_mapping)
-        hpwl = calculate_hpwl(modules_placed, nets)
-        print(f"HPWL for chromosome {chromosome}: {hpwl}")
-        reset_shelves(shelves, modules_removed)
-
-    #print("Initial population: ", initial_population)
+    best_solution, fitness_progress = genetic_algorithm(modules_removed, shelves, nets)
     placement_end_time = time.time()
     print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
     print(f"Placement runtime: {placement_end_time - placement_start_time:.2f}s")
@@ -646,19 +637,9 @@ if __name__ == "__main__":
     # Visualize the row-based design
     visualize_row_based_design(shelves)
 
-    # Optionally plot the fitness progress
-    # def plot_fitness_progress(fitness_values):
-    #     plt.figure()
-    #     plt.plot(fitness_values, marker='o')
-    #     plt.title("HPWL Fitness Over Generations")
-    #     plt.xlabel("Generation")
-    #     plt.ylabel("Best HPWL (Lower is Better)")
-    #     plt.grid(True)
-    #     plt.show()
+    # Plot the fitness progress
+    plot_fitness_progress(fitness_progress)
 
-    # # Plot the fitness progress
-    # plot_fitness_progress(fitness_progress)
-
-    # # Output the best solution
+    # Output the best solution
     # for module in best_solution:
     #     print(module)
