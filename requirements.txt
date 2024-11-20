@@ -1,0 +1,12 @@
+configparser
+pandas
+openpyxl
+pathlib
+random
+os
+copy
+string
+time
+matplotlib
+concurrent.futures
+queue
