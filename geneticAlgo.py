@@ -893,9 +893,9 @@ if __name__ == "__main__":
     # Queue for visualization tasks
     visualization_queue = Queue()
 
-    for MUTATION_RATE in np.arange(0.0, 1.0, MR_CHANGE_RATE):
+    for MUTATION_RATE in np.arange(0.1, 0.8, MR_CHANGE_RATE):
         print(f"#################################### Mutation Rate: {MUTATION_RATE:.2f} ####################################")
-        for ELITISM_RATE in np.arange(0.0, 1.0, ELITISM_CHANGE_RATE):
+        for ELITISM_RATE in np.arange(0.1, 0.8, ELITISM_CHANGE_RATE):
             print(f"#################################### Elitism Rate: {ELITISM_RATE:.2f} ####################################")
             for subdir in directory_path.iterdir():
                 if subdir.is_dir():
