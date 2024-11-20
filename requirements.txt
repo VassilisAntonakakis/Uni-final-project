@@ -10,3 +10,4 @@ time
 matplotlib
 concurrent.futures
 queue
+openpyxl
