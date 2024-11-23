@@ -809,7 +809,7 @@ def roulette_wheel_selection(population, fitness_values):
                 return individual
     return random.choice(population)  # Fallback in case of rounding issues
 
-def save_results_to_excel(filename, circuit, xOp, fitness_progress, placement_time):
+def save_results_to_excel(filename, circuit, xOp, fitness_progress, placement_time, fit_prog_list):
     if not LOG_RESULTS:
         return None
     
@@ -821,10 +821,10 @@ def save_results_to_excel(filename, circuit, xOp, fitness_progress, placement_ti
         'Initial Population': [POPULATION_SIZE],
         'Initial HPWL': [initial_HPWL],
         'Final HPWL': [fitness_progress],
-        'Fitness Progress': [fitness_progress],
+        'Fitness Progress': [fit_prog_list],
         'Improvement Percentage': [(initial_HPWL - fitness_progress) / initial_HPWL * 100],
-        'Elitism': [config['OPTIONS']['ELITISM_RATE']],
-        'Mutation Rate': [config['OPTIONS']['MUTATION_RATE']],
+        'Elitism': [ELITISM_RATE],
+        'Mutation Rate': [MUTATION_RATE],
         'Placement Time(s)': [placement_time],
         'CrossOver Operator': [xOp]
     })
@@ -851,7 +851,7 @@ def save_results_to_excel(filename, circuit, xOp, fitness_progress, placement_ti
         df.to_excel(file_path, index=False)
 
 def join_excel_files():
-    if not LOG_RESULTS:
+    if not LOG_RESULTS and COMBINE_RESULTS:
         return None
     
     # Join all Excel files in the results folder into a single file
@@ -889,161 +889,158 @@ if __name__ == "__main__":
     ELITISM_CHANGE_RATE = float(config['OPTIONS']['ELITISM_CHANGE_RATE'])
     MAX_THREADS = int(config['OPTIONS']['MAX_THREADS'])
     SMALL_DESIGNS_PATH = config['PATHS']['small_designs']
+    COMBINE_RESULTS = config['OPTIONS'].getboolean('COMBINE_RESULTS')
     directory_path = Path(SMALL_DESIGNS_PATH)
     # Queue for visualization tasks
     visualization_queue = Queue()
 
-    for MUTATION_RATE in np.arange(0.0, 1.0, MR_CHANGE_RATE):
-        print(f"#################################### Mutation Rate: {MUTATION_RATE:.2f} ####################################")
-        for ELITISM_RATE in np.arange(0.0, 1.0, ELITISM_CHANGE_RATE):
-            print(f"#################################### Elitism Rate: {ELITISM_RATE:.2f} ####################################")
-            for subdir in directory_path.iterdir():
-                if subdir.is_dir():
-                    subdirectory = SMALL_DESIGNS_PATH + subdir.name + "/"
-                    for file in os.listdir(subdirectory):
-                        if file.endswith(".aux"):
-                            aux_file = file
-                        elif file.endswith(".nodes"):
-                            nodes_file = file
-                        elif file.endswith(".nets"):
-                            nets_file = file
-                        elif file.endswith(".pl"):
-                            pl_file = file
-                        elif file.endswith(".scl"):
-                            shelves_file = file
-                        
 
-                    # Parsing files
-                    parsing_start_time = time.time()
-                    filenames = filenames_parser(subdirectory + aux_file)
-                    modules = parse_nodes(subdirectory + nodes_file)
-                    shelves = parse_shelves(subdirectory + shelves_file)
-                    nets = parse_custom_nets(subdirectory + nets_file)
-                    parsing_end_time = time.time()
-                    
-                    #=============================================PMX==========================================================
-                    
-                    if PMX_RUN:
-                        # Starting placement
-                        initial_HPWL = starting_placement(modules, shelves)
-                        pmx_placement_start_time = time.time()
-                        #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-                        best_solution_pmx, fitness_progress_pmx = genetic_algorithm_pmx(modules, shelves, nets)
-                        pmx_placement_end_time = time.time()
-                        
-                        filename = (subdir.name + "_MR" +
-                                    str(config['OPTIONS']['MUTATION_RATE']) +
-                                    "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
-                                    "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
-                                    "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_PMX")
-                        
-                        # Save results to Excel
-                        save_results_to_excel(filename, subdir.name, 'PMX', fitness_progress_pmx[-1], pmx_placement_end_time - pmx_placement_start_time)
-                        
-                        # Timing stats
-                        # print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
-                        # print(f"PMX Placement runtime: {placement_end_time - placement_start_time:.2f}s")
+    print(f"#################################### Elitism Rate: {ELITISM_RATE:.2f} ####################################")
 
-                        # Visualization
-                        #visualize_row_based_design(shelves, 'PMX')
-                        #plot_fitness_progress(fitness_progress_pmx, "PMX")
-                        #queue_visualization(shelves, 'PMX')
-                    else:
-                        print("PMX is not enabled.")
-                    
-                    #=============================================MPMX==========================================================
-                    if MPMX_RUN:
-                        mpmx_placement_start_time = time.time()
-                        #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-                        best_solution_mpmx, fitness_progress_mpmx = genetic_algorithm_mpmx(modules, shelves, nets)
-                        mpmx_placement_end_time = time.time()
-                        
-                        filename = (subdir.name + "_MR" +
-                                    str(config['OPTIONS']['MUTATION_RATE']) +
-                                    "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
-                                    "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
-                                    "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_MPMX")
-                        
-                        # Save results to Excel
-                        save_results_to_excel(filename, subdir.name, 'PMX', fitness_progress_mpmx[-1], mpmx_placement_end_time - mpmx_placement_start_time)
-                        
-                        # Timing stats
-                        #print(f"MPMX Placement runtime: {placement_end_time - placement_start_time:.2f}s")
-
-                        # # Visualization
-                        # #visualize_row_based_design(shelves, 'MPMX')
-                        # #plot_fitness_progress(fitness_progress_mpmx)
-                        # queue_visualization(shelves, 'MPMX')
-                    else:
-                        print("MPMX is not enabled.")
-                
-                    #=============================================CSEX==========================================================
-                    if CSEX_RUN:
-                        csex_placement_start_time = time.time()
-                        #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-                        best_solution_csex, fitness_progress_csex = genetic_algorithm_csex(modules, shelves, nets)
-                        csex_placement_end_time = time.time()
-                        
-                        filename = (subdir.name + "_MR" +
-                                    str(config['OPTIONS']['MUTATION_RATE']) +
-                                    "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
-                                    "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
-                                    "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_CSEX")
-                        
-                        # Save results to Excel
-                        save_results_to_excel(filename, subdir.name, 'CSEX', fitness_progress_csex[-1], csex_placement_end_time - csex_placement_start_time)
-                        
-                        # Timing stats
-                        #print(f"CSEX Placement runtime: {placement_end_time - placement_start_time:.2f}s")
-
-                        # Visualization
-                        #visualize_row_based_design(shelves, 'CSEX')
-                        #plot_fitness_progress(fitness_progress_csex, "CSEX")
-                        #queue_visualization(shelves, 'CSEX')
-                    else:
-                        print("CSEX is not enabled.")
-                    
-                    #=============================================PX==========================================================            
-                    if PX_RUN:
-                        px_placement_start_time = time.time()
-                        #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-                        best_solution_px, fitness_progress_px = genetic_algorithm_px(modules, shelves, nets)
-                        px_placement_end_time = time.time()
-                        
-                        filename = (subdir.name + "_MR" +
-                                    str(config['OPTIONS']['MUTATION_RATE']) +
-                                    "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
-                                    "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
-                                    "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_PX")
-                        
-                        # Save results to Excel
-                        save_results_to_excel(filename, subdir.name, 'PX', fitness_progress_px[-1], px_placement_end_time - px_placement_start_time)
-                        
-                        # Timing stats
-                        #print(f"PX Placement runtime: {placement_end_time - placement_start_time:.2f}s")
-                    else:
-                        print("PX is not enabled.")
-                    
-                    print(f"========================== {subdir.name} ==========================\n")
-                    print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
-                    if PMX_RUN: print(f"PMX Placement runtime: {pmx_placement_end_time - pmx_placement_start_time:.2f}s") 
-                    else: None
-                    if MPMX_RUN: print(f"MPMX Placement runtime: {mpmx_placement_end_time - mpmx_placement_start_time:.2f}s")
-                    else: None
-                    if CSEX_RUN: print(f"CSEX Placement runtime: {csex_placement_end_time - csex_placement_start_time:.2f}s")  
-                    else: None
-                    if PX_RUN: print(f"PX Placement runtime: {px_placement_end_time - px_placement_start_time:.2f}s")
-                    else: None                    
-                    
-                    # # Visualization
-                    # visualize_row_based_design(shelves, 'PX')
-                    # # plot_fitness_progress(fitness_progress_px)
-                    # #queue_visualization(shelves, 'PX')
-                    # plot_fitness_progress(fitness_progress_pmx, "PMX")
-                    # plot_fitness_progress(fitness_progress_csex, "CSEX")
-                    # #plot_fitness_progress(fitness_progress_mpmx, "MPMX")
-                    # plot_fitness_progress(fitness_progress_px, "PX")
+    print(f"#################################### Mutation Rate: {MUTATION_RATE:.2f} ####################################")
+    for subdir in directory_path.iterdir():
+        if subdir.is_dir():
+            subdirectory = SMALL_DESIGNS_PATH + subdir.name + "/"
+            for file in os.listdir(subdirectory):
+                if file.endswith(".aux"):
+                    aux_file = file
+                elif file.endswith(".nodes"):
+                    nodes_file = file
+                elif file.endswith(".nets"):
+                    nets_file = file
+                elif file.endswith(".pl"):
+                    pl_file = file
+                elif file.endswith(".scl"):
+                    shelves_file = file
             
-            # After the algorithm is done
-            #process_visualizations()
+            # Parsing files
+            parsing_start_time = time.time()
+            filenames = filenames_parser(subdirectory + aux_file)
+            modules = parse_nodes(subdirectory + nodes_file)
+            shelves = parse_shelves(subdirectory + shelves_file)
+            nets = parse_custom_nets(subdirectory + nets_file)
+            parsing_end_time = time.time()
+            
+            #=============================================PMX==========================================================
+            
+            if PMX_RUN:
+                # Starting placement
+                initial_HPWL = starting_placement(modules, shelves)
+                pmx_placement_start_time = time.time()
+                #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
+                best_solution_pmx, fitness_progress_pmx = genetic_algorithm_pmx(modules, shelves, nets)
+                pmx_placement_end_time = time.time()
+                
+                filename = (subdir.name + "_MR" +
+                            str(config['OPTIONS']['MUTATION_RATE']) +
+                            "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
+                            "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
+                            "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_PMX")
+                
+                # Save results to Excel
+                save_results_to_excel(filename, subdir.name, 'PMX', fitness_progress_pmx[-1], pmx_placement_end_time - pmx_placement_start_time, fitness_progress_pmx)
+                
+                # Timing stats
+                # print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
+                # print(f"PMX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
+                # Visualization
+                #visualize_row_based_design(shelves, 'PMX')
+                #plot_fitness_progress(fitness_progress_pmx, "PMX")
+                #queue_visualization(shelves, 'PMX')
+            else:
+                print("PMX is not enabled.")
+            
+            #=============================================MPMX==========================================================
+            if MPMX_RUN:
+                mpmx_placement_start_time = time.time()
+                #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
+                best_solution_mpmx, fitness_progress_mpmx = genetic_algorithm_mpmx(modules, shelves, nets)
+                mpmx_placement_end_time = time.time()
+                
+                filename = (subdir.name + "_MR" +
+                            str(config['OPTIONS']['MUTATION_RATE']) +
+                            "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
+                            "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
+                            "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_MPMX")
+                
+                # Save results to Excel
+                save_results_to_excel(filename, subdir.name, 'MPMX', fitness_progress_mpmx[-1], mpmx_placement_end_time - mpmx_placement_start_time, fitness_progress_mpmx)
+                
+                # Timing stats
+                #print(f"MPMX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
+                # # Visualization
+                # #visualize_row_based_design(shelves, 'MPMX')
+                # #plot_fitness_progress(fitness_progress_mpmx)
+                # queue_visualization(shelves, 'MPMX')
+            else:
+                print("MPMX is not enabled.")
+        
+            #=============================================CSEX==========================================================
+            if CSEX_RUN:
+                csex_placement_start_time = time.time()
+                #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
+                best_solution_csex, fitness_progress_csex = genetic_algorithm_csex(modules, shelves, nets)
+                csex_placement_end_time = time.time()
+                
+                filename = (subdir.name + "_MR" +
+                            str(config['OPTIONS']['MUTATION_RATE']) +
+                            "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
+                            "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
+                            "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_CSEX")
+                
+                # Save results to Excel
+                save_results_to_excel(filename, subdir.name, 'CSEX', fitness_progress_csex[-1], csex_placement_end_time - csex_placement_start_time, fitness_progress_csex)
+                
+                # Timing stats
+                #print(f"CSEX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
+                # Visualization
+                #visualize_row_based_design(shelves, 'CSEX')
+                #plot_fitness_progress(fitness_progress_csex, "CSEX")
+                #queue_visualization(shelves, 'CSEX')
+            else:
+                print("CSEX is not enabled.")
+            
+            #=============================================PX==========================================================            
+            if PX_RUN:
+                px_placement_start_time = time.time()
+                #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
+                best_solution_px, fitness_progress_px = genetic_algorithm_px(modules, shelves, nets)
+                px_placement_end_time = time.time()
+                
+                filename = (subdir.name + "_MR" +
+                            str(config['OPTIONS']['MUTATION_RATE']) +
+                            "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
+                            "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
+                            "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_PX")
+                
+                # Save results to Excel
+                save_results_to_excel(filename, subdir.name, 'PX', fitness_progress_px[-1], px_placement_end_time - px_placement_start_time, fitness_progress_px)
+                
+                # Timing stats
+                #print(f"PX Placement runtime: {placement_end_time - placement_start_time:.2f}s")
+            else:
+                print("PX is not enabled.")
+            
+            print(f"========================== {subdir.name} ==========================\n")
+            print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
+            if PMX_RUN: print(f"PMX Placement runtime: {pmx_placement_end_time - pmx_placement_start_time:.2f}s") 
+            else: None
+            if MPMX_RUN: print(f"MPMX Placement runtime: {mpmx_placement_end_time - mpmx_placement_start_time:.2f}s")
+            else: None
+            if CSEX_RUN: print(f"CSEX Placement runtime: {csex_placement_end_time - csex_placement_start_time:.2f}s")  
+            else: None
+            if PX_RUN: print(f"PX Placement runtime: {px_placement_end_time - px_placement_start_time:.2f}s")
+            else: None                    
+            
+            # # Visualization
+            # visualize_row_based_design(shelves, 'PX')
+            # # plot_fitness_progress(fitness_progress_px)
+            # #queue_visualization(shelves, 'PX')
+            # plot_fitness_progress(fitness_progress_pmx, "PMX")
+            # plot_fitness_progress(fitness_progress_csex, "CSEX")
+            # #plot_fitness_progress(fitness_progress_mpmx, "MPMX")
+            # plot_fitness_progress(fitness_progress_px, "PX")
+    
+    # After the algorithm is done
+    #process_visualizations()
     join_excel_files()
