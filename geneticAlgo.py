@@ -851,7 +851,7 @@ def save_results_to_excel(filename, circuit, xOp, fitness_progress, placement_ti
         df.to_excel(file_path, index=False)
 
 def join_excel_files():
-    if not LOG_RESULTS and COMBINE_RESULTS:
+    if not LOG_RESULTS and not COMBINE_RESULTS:
         return None
     
     # Join all Excel files in the results folder into a single file
