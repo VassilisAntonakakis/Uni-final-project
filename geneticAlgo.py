@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 import numpy as np
 
+
+
 class Module:
     def __init__(self, name, width, height, terminal=False):
         self.name = name
@@ -69,14 +71,14 @@ class Shelf:
         elif index == len(self.contained_modules):
             self.contained_modules.append(module)
         else:
-            print("Warning: Module not inserted at correct index!")
+            pass#print("Warning: Module not inserted at correct index!")
         
     def check_module_overlap(self):
         # Check if any modules in the shelf overlap with each other
         previous_x = 0
         for module in self.contained_modules:
             if module.x < previous_x:
-                print(f"Warning: Module {module.name} overlaps with previous module(s) in the shelf!\n")
+                #print(f"Warning: Module {module.name} overlaps with previous module(s) in the shelf!\n")
                 return True
             previous_x = module.x + module.width
         return False
@@ -92,26 +94,113 @@ class Shelf:
             return 0  # Place at the start of the shelf
 
         # Check spaces between consecutive modules
-        previous_x = first_module.x + first_module.width
-        for index in range(1, len(self.contained_modules)):
-            current_module = self.contained_modules[index]
-            space = current_module.x - previous_x
-            if space >= size_needed:
-                return previous_x
-            previous_x = current_module.x + current_module.width
+        try:
+            previous_x = first_module.x + first_module.width
+            for index in range(1, len(self.contained_modules)):
+                current_module = self.contained_modules[index]
+                space = current_module.x - previous_x
+                if space >= size_needed:
+                    return previous_x
+                previous_x = current_module.x + current_module.width
+                
+            # Check space after the last module in the shelf
+            last_module = self.contained_modules[-1]
+            if (self.max_width - (last_module.x + last_module.width)) >= size_needed:
+                return last_module.x + last_module.width
 
-        # Check space after the last module in the shelf
-        last_module = self.contained_modules[-1]
-        if (self.max_width - (last_module.x + last_module.width)) >= size_needed:
-            return last_module.x + last_module.width
-
-        # No space found
-        return None
-
+            # No space found
+            return None                 
+        except IndexError:
+            return None
 
     def __repr__(self):
         return f"Shelf(height={self.height}, max_width={self.max_width}, used_width={self.used_width})"
 
+class Rail:
+    def __init__(self, core_width, core_height, buffer_distance):
+        self.buffer_distance = buffer_distance
+        self.continuous_spaces = {
+            "bottom": [0, core_width, -buffer_distance - 1],
+            "right": [0, core_height, core_width + buffer_distance],  # Offset right rail
+            "top": [0, core_width, core_height + buffer_distance],
+            "left": [0, core_height, -buffer_distance - 1]
+        }
+        self.occupied_rects = []  # Track occupied rectangles to avoid overlaps
+
+    def can_place(self, x, y, width, height):
+        """Check if a terminal can be placed without overlapping."""
+        for rect in self.occupied_rects:
+            rx, ry, rw, rh = rect
+            if not (x + width <= rx or x >= rx + rw or y + height <= ry or y >= ry + rh):
+                return False
+        return True
+
+    def add_terminal(self, x, y, width, height):
+        """Add a terminal to the rail."""
+        self.occupied_rects.append((x, y, width, height))
+
+def place_terminals_on_rails(terminals, rail, modules, nets, core_width, core_height):
+    """
+    Place terminals evenly around the rails of the core area.
+
+    Parameters:
+        terminals (list): List of terminal nodes (Module objects).
+        rail (Rail): Rail object defining the continuous rail spaces.
+        modules (list): List of all modules in the design.
+        nets (list): List of nets connecting the modules.
+        core_width (float): Width of the core area.
+        core_height (float): Height of the core area.
+    """
+    if not terminals:
+        print("No terminals to place.")
+        return
+
+    num_terminals = len(terminals)
+    rail_perimeter = 2 * (core_width + core_height)  # Total rail perimeter
+    spacing = rail_perimeter / num_terminals  # Spacing between terminals
+
+    # Initialize placement variables
+    current_position = 0  # Tracks position along the rail perimeter
+
+    for terminal in terminals:
+        placed = False
+        remaining_position = current_position  # Current position relative to rail segments
+
+        # Iterate through the rails in clockwise order: bottom, right, top, left
+        for side, (start, end, fixed) in [
+            ("bottom", (0, core_width, -rail.buffer_distance - terminal.height)),
+            ("right", (0, core_height, core_width + rail.buffer_distance)),
+            ("top", (0, core_width, core_height + rail.buffer_distance)),
+            ("left", (0, core_height, -rail.buffer_distance - terminal.width)),
+        ]:
+            rail_length = end - start  # Length of the current rail
+
+            # Check if remaining_position is within this rail
+            if remaining_position < rail_length:
+                if side in ["bottom", "top"]:  # Horizontal rails
+                    x = start + remaining_position
+                    y = fixed  # Fixed y-coordinate
+                elif side in ["left", "right"]:  # Vertical rails
+                    x = fixed  # Fixed x-coordinate
+                    y = start + remaining_position
+
+                # Check if the terminal can be placed
+                if rail.can_place(x, y, terminal.width, terminal.height):
+                    terminal.x, terminal.y = x, y
+                    rail.add_terminal(x, y, terminal.width, terminal.height)
+                    placed = True
+                    #print(f"Placed terminal {terminal.name} at ({x:.2f}, {y:.2f}) on the {side} rail.")
+                    break
+
+            # Update remaining_position for the next rail
+            remaining_position -= rail_length
+
+        # Move to the next terminal position
+        current_position += spacing
+
+        if not placed:
+            print(f"Warning: Unable to place terminal {terminal.name}.")
+    
 def filenames_parser(aux_filepath):
     filenames = []
     with open(aux_filepath, "r") as file:
@@ -295,14 +384,26 @@ def reset_shelves(shelves):
         shelf.reset_shelf()
 
 # Modified fitness function to use HPWL
-def fitness(chromosome, modules, nets, shelves):
+def fitness(chromosome, modules, nets, shelves, rail, core_width, core_height):
+    """
+    Calculate the fitness of a chromosome by placing modules and terminals
+    and then computing the HPWL.
+    """
     # Reset shelves to start fresh for each chromosome evaluation
     reset_shelves(shelves)
-    individual = create_individual(modules, shelves, chromosome)
+
+    # Step 1: Place non-terminal modules based on the chromosome
+    individual = create_individual(non_terminals, shelves, chromosome)
     if individual is None:
         return float('inf')  # Penalize if placement failed
-    # Calculate HPWL for this placement
-    hpwl = calculate_hpwl(individual, nets)
+
+    # Step 2: Separate terminals and place them on the rails
+    #terminals = [module for module in modules if module.terminal]
+    #place_terminals_on_rails(terminals, rail, individual, nets, core_width, core_height)
+
+    # Step 3: Calculate HPWL for the combined placement
+    hpwl = calculate_hpwl(individual + terminals, nets)
+
     return hpwl
 
 def mutate(chromosome, mutation_rate=0.2):
@@ -324,11 +425,12 @@ def plot_fitness_progress(fitness_progress, xOp):
 
 # Genetic algorithm functions
 def create_individual(modules, shelves, chromosome):
-    modules_copy = deepcopy(modules)
+    modules_copy = deepcopy(non_terminals)
     reset_shelves(shelves)
     individual = []
 
     for module_index in chromosome:
+        #print(f"Placing module {module_index}\n")
         module = modules_copy[module_index]
         placed = False
 
@@ -373,7 +475,7 @@ def starting_placement(modules, shelves):
         print(f"Shelf {shelves.index(shelf)} utilization: {shelf.used_width / shelf.max_width * 100:.2f}%")
     
     #print("Initial placement HPWL: ", )
-    
+    #visualize_row_based_design(shelves, "Initial Placement")
     return calculate_hpwl(modules, nets)
 
 def generate_string_mapping(modules):
@@ -562,41 +664,69 @@ def split_string(s, length):
         parts.append(s[i:i+length])
     return parts
 
-def visualize_row_based_design(shelves, xOp):
+def visualize_row_based_design(shelves, xOp, rail=None, terminals=None):
     fig, ax = plt.subplots()
 
+    # Draw shelves and modules
     for shelf_index, shelf in enumerate(shelves):
-        y_offset = sum([s.height for s in shelves[:shelf_index]])  # Calculate y-position based on previous shelves
+        y_offset = sum([s.height for s in shelves[:shelf_index]])
         for module in shelf.contained_modules:
-            # Draw a rectangle for each module. If it's a terminal, put the rectangle on the y axis border of the shelf
-            y = y_offset if module.terminal else y_offset + (shelf.height - module.height) / 2
-            rect = patches.Rectangle((module.x, y), module.width, module.height, linewidth=1, edgecolor='#000000', facecolor='#c4c4c4', alpha=1)
-            # Add the name of the module in the rectangle and make it so that the name scales with the size of the rectangle
-            #ax.text(module.x + module.width / 2, y + module.height / 2, module.name, ha='center', va='center', fontsize=8)
-            
+            y = y_offset + (shelf.height - module.height) / 2
+            color = 'lightblue' if module.terminal else 'gray'
+            rect = patches.Rectangle(
+                (module.x, y), module.width, module.height,
+                linewidth=1, edgecolor='black', facecolor=color, alpha=0.8
+            )
             ax.add_patch(rect)
-            
-            # rect = patches.Rectangle((module.x, y_offset), module.width, module.height, linewidth=1, edgecolor='#000000', facecolor='#c4c4c4', alpha=1)
-            # ax.add_patch(rect)
 
-    # Set the limits and display the grid
-    ax.set_xlim(0, max([s.max_width for s in shelves]))
-    ax.set_ylim(0, sum([s.height for s in shelves]))
+        # Draw shelf borders
+        ax.plot([0, shelf.max_width], [y_offset, y_offset], color='black', linewidth=1)  # Top border
+        ax.plot([0, shelf.max_width], [y_offset + shelf.height, y_offset + shelf.height], color='black', linewidth=1)  # Bottom border
+
+    # Draw rails
+    if rail:
+        core_width = max([s.max_width for s in shelves])
+        core_height = sum([s.height for s in shelves])
+
+        # Draw continuous rail strips
+        rail_rects = [
+            (0, -rail.buffer_distance - 1, core_width, 1),  # Bottom rail
+            (core_width + rail.buffer_distance, 0, 1, core_height),  # Right rail
+            (0, core_height + rail.buffer_distance, core_width, 1),  # Top rail
+            (-rail.buffer_distance - 1, 0, 1, core_height)  # Left rail
+        ]
+        for x, y, w, h in rail_rects:
+            rect = patches.Rectangle((x, y), w, h, linewidth=0.5, edgecolor='black', facecolor='lightgray', alpha=0.5)
+            ax.add_patch(rect)
+
+        # Draw terminals on rails
+        if terminals:
+            for terminal in terminals:
+                rect = patches.Rectangle(
+                    (terminal.x, terminal.y), terminal.width, terminal.height,
+                    linewidth=1, edgecolor='black', facecolor='lightblue', alpha=0.8
+                )
+                ax.add_patch(rect)
+
+    # Draw boundary around the core
+    core_width = max([s.max_width for s in shelves])
+    core_height = sum([s.height for s in shelves])
+    core_rect = patches.Rectangle(
+        (0, 0), core_width, core_height,
+        linewidth=2, edgecolor='red', facecolor='none'
+    )
+    ax.add_patch(core_rect)
+
+    # Set plot limits and grid
+    buffer_distance = rail.buffer_distance if rail else 0
+    ax.set_xlim(-buffer_distance - 2, core_width + buffer_distance + 2)
+    ax.set_ylim(-buffer_distance - 2, core_height + buffer_distance + 2)
     ax.set_aspect('equal', adjustable='box')
-    plt.gca().invert_yaxis()  # Invert Y axis to match row layout
-    # Display the row names on the left side of the plot with the number of the row (len of shelves - index) 
-    for i, shelf in enumerate(shelves):
-        plt.text(-50, sum([s.height for s in shelves[:i]]) + shelf.height / 2, f"Row {len(shelves) - i}", ha='center', va='center')
-    
-    #show a line at the end of each row
-    for i, shelf in enumerate(shelves):
-        plt.plot([0, shelf.max_width], [sum([s.height for s in shelves[:i]]), sum([s.height for s in shelves[:i]])], color='black', linewidth=1)
-    
-    ax.xaxis.set_tick_params(labelbottom=False)
-    ax.yaxis.set_tick_params(labelleft=False)
+    plt.gca().invert_yaxis()
     plt.title(f"Row-Based Placement Visualization ({xOp})")
+    plt.grid(visible=True, which='both', color='lightgray', linestyle='--', linewidth=0.5)
     plt.show()
-    
+   
 def gene_decoding(s):
     base = 26
     result = 0
@@ -622,23 +752,14 @@ def worker_task(thread_id, modules, shelves, chromosome, nets):
     #print(f"Thread-{thread_id}: HPWL = {hpwl}\n")
     return hpwl
 
-def parallel_fitness_evaluation(population, modules, shelves, nets, max_threads=4):
-    """
-    Evaluates fitness for the entire population using multithreading.
-    """
+def parallel_fitness_evaluation(population, modules, shelves, nets, rail, core_width, core_height, max_threads=4):
     fitness_scores = []
     with ThreadPoolExecutor(max_threads) as executor:
-        # Submit a fitness evaluation task for each chromosome
         futures = [
-            executor.submit(worker_task, i, modules, shelves, chromosome, nets)
-            for i, chromosome in enumerate(population)
+            executor.submit(fitness, chromosome, modules, nets, shelves, rail, core_width, core_height)
+            for chromosome in population
         ]
-        # Collect results as threads complete
-        try:
-            fitness_scores = [future.result(timeout=30) for future in futures]  # Add a timeout
-        except Exception as e:
-            print(f"Thread execution error: {e}")
-            fitness_scores = [float('inf')] * len(population)
+        fitness_scores = [future.result(timeout=30) for future in futures]
     return fitness_scores
 
 def genetic_algorithm_pmx(modules, shelves, nets):
@@ -654,7 +775,9 @@ def genetic_algorithm_pmx(modules, shelves, nets):
         print(f"========================== Generation {generation} (PMX) ==========================\n")
         
         # Parallel fitness evaluation
-        fitness_values = parallel_fitness_evaluation(population, modules, shelves, nets, max_threads=MAX_THREADS)
+        fitness_values = parallel_fitness_evaluation(
+        population, modules, shelves, nets, rail, core_width, core_height, max_threads=MAX_THREADS
+        )
         
         # Sort population by fitness
         population = [chrom for _, chrom in sorted(zip(fitness_values, population))]
@@ -682,7 +805,7 @@ def genetic_algorithm_pmx(modules, shelves, nets):
         population = next_generation
 
         # Track the best fitness
-        best_fitness = fitness(population[0], modules, nets, deepcopy(shelves))
+        best_fitness = fitness(population[0], modules, nets, deepcopy(shelves), rail, core_width, core_height)
         best_fitness_per_generation.append(best_fitness)
         print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
 
@@ -696,7 +819,9 @@ def genetic_algorithm_mpmx(modules, shelves, nets):
     for generation in range(GENERATIONS):
         print(f"========================== Generation {generation} (MPMX) ==========================\n")
         
-        fitness_values = parallel_fitness_evaluation(population, modules, shelves, nets, max_threads=MAX_THREADS)
+        fitness_values = parallel_fitness_evaluation(
+        population, modules, shelves, nets, rail, core_width, core_height, max_threads=MAX_THREADS
+        )
         #print(f"Fitness Values (Generation {generation}): {fitness_values}")
 
         population = [chrom for _, chrom in sorted(zip(fitness_values, population))]
@@ -719,7 +844,7 @@ def genetic_algorithm_mpmx(modules, shelves, nets):
                 next_generation.append(child2)
 
         population = next_generation
-        best_fitness = fitness(population[0], modules, nets, deepcopy(shelves))
+        best_fitness = fitness(population[0], modules, nets, deepcopy(shelves), rail, core_width, core_height)
         best_fitness_per_generation.append(best_fitness)
         print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
 
@@ -733,7 +858,9 @@ def genetic_algorithm_csex(modules, shelves, nets):
     for generation in range(GENERATIONS):
         print(f"========================== Generation {generation} (CSEX) ==========================\n")
         
-        fitness_values = parallel_fitness_evaluation(population, modules, shelves, nets, max_threads=MAX_THREADS)
+        fitness_values = parallel_fitness_evaluation(
+        population, modules, shelves, nets, rail, core_width, core_height, max_threads=MAX_THREADS
+        )
         population = [chrom for _, chrom in sorted(zip(fitness_values, population))]
 
         elite_size = int(ELITISM_RATE * POPULATION_SIZE)
@@ -754,7 +881,7 @@ def genetic_algorithm_csex(modules, shelves, nets):
                 next_generation.append(child2)
 
         population = next_generation
-        best_fitness = fitness(population[0], modules, nets, deepcopy(shelves))
+        best_fitness = fitness(population[0], modules, nets, deepcopy(shelves), rail, core_width, core_height)
         best_fitness_per_generation.append(best_fitness)
         print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
 
@@ -768,7 +895,9 @@ def genetic_algorithm_px(modules, shelves, nets):
     for generation in range(GENERATIONS):
         print(f"========================== Generation {generation} (PX) ==========================\n")
         
-        fitness_values = parallel_fitness_evaluation(population, modules, shelves, nets, max_threads=MAX_THREADS)
+        fitness_values = parallel_fitness_evaluation(
+        population, modules, shelves, nets, rail, core_width, core_height, max_threads=MAX_THREADS
+        )
         population = [chrom for _, chrom in sorted(zip(fitness_values, population))]
 
         elite_size = int(ELITISM_RATE * POPULATION_SIZE)
@@ -789,7 +918,7 @@ def genetic_algorithm_px(modules, shelves, nets):
                 next_generation.append(child2)
 
         population = next_generation
-        best_fitness = fitness(population[0], modules, nets, deepcopy(shelves))
+        best_fitness = fitness(population[0], modules, nets, deepcopy(shelves), rail, core_width, core_height)
         best_fitness_per_generation.append(best_fitness)
         print(f"Generation {generation}, Best Fitness (HPWL): {best_fitness}")
 
@@ -894,153 +1023,168 @@ if __name__ == "__main__":
     # Queue for visualization tasks
     visualization_queue = Queue()
 
+    for ELITISM_RATE in np.arange(0.1, 0.8, ELITISM_CHANGE_RATE):
+        print(f"#################################### Elitism Rate: {ELITISM_RATE:.2f} ####################################")
+        for MUTATION_RATE in np.arange(0.1, 0.8, MR_CHANGE_RATE):
+            print(f"#################################### Mutation Rate: {MUTATION_RATE:.2f} ####################################")
+            for subdir in directory_path.iterdir():
+                if subdir.is_dir():
+                    subdirectory = SMALL_DESIGNS_PATH + subdir.name + "/"
+                    for file in os.listdir(subdirectory):
+                        if file.endswith(".aux"):
+                            aux_file = file
+                        elif file.endswith(".nodes"):
+                            nodes_file = file
+                        elif file.endswith(".nets"):
+                            nets_file = file
+                        elif file.endswith(".pl"):
+                            pl_file = file
+                        elif file.endswith(".scl"):
+                            shelves_file = file
+                    
+                    # Parsing files
+                    parsing_start_time = time.time()
+                    filenames = filenames_parser(subdirectory + aux_file)
+                    modules = parse_nodes(subdirectory + nodes_file)
+                    shelves = parse_shelves(subdirectory + shelves_file)
+                    nets = parse_custom_nets(subdirectory + nets_file)
+                    parsing_end_time = time.time()
+                    
+                    # Create rail based on core dimensions and buffer distance
+                    buffer_distance = int(config['OPTIONS']['BUFFER_DISTANCE'])
+                    core_width = max([s.max_width for s in shelves])
+                    core_height = sum([s.height for s in shelves])
+                    rail = Rail(core_width, core_height, buffer_distance)
 
-    print(f"#################################### Elitism Rate: {ELITISM_RATE:.2f} ####################################")
+                    # Separate terminal nodes from regular modules
+                    terminals = [m for m in modules if m.terminal]
+                    non_terminals = [m for m in modules if not m.terminal]
 
-    print(f"#################################### Mutation Rate: {MUTATION_RATE:.2f} ####################################")
-    for subdir in directory_path.iterdir():
-        if subdir.is_dir():
-            subdirectory = SMALL_DESIGNS_PATH + subdir.name + "/"
-            for file in os.listdir(subdirectory):
-                if file.endswith(".aux"):
-                    aux_file = file
-                elif file.endswith(".nodes"):
-                    nodes_file = file
-                elif file.endswith(".nets"):
-                    nets_file = file
-                elif file.endswith(".pl"):
-                    pl_file = file
-                elif file.endswith(".scl"):
-                    shelves_file = file
+                    place_terminals_on_rails(terminals, rail, modules, nets, core_width, core_height)
+                    #visualize_row_based_design(shelves, "", rail=rail, terminals=terminals)
+                    # Run genetic algorithms
+                    
+                    #=============================================PMX==========================================================
+                    
+                    if PMX_RUN:
+                        # Starting placement
+                        initial_HPWL = starting_placement(non_terminals, shelves)
+                        pmx_placement_start_time = time.time()
+                        #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
+                        best_solution_pmx, fitness_progress_pmx = genetic_algorithm_pmx(non_terminals, shelves, nets)
+                        #visualize_row_based_design(shelves, 'PMX', rail=rail, terminals=terminals)
+                        pmx_placement_end_time = time.time()
+                        
+                        filename = (subdir.name + "_MR" +
+                                    str(config['OPTIONS']['MUTATION_RATE']) +
+                                    "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
+                                    "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
+                                    "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_PMX")
+                        
+                        # Save results to Excel
+                        save_results_to_excel(filename, subdir.name, 'PMX', fitness_progress_pmx[-1], pmx_placement_end_time - pmx_placement_start_time, fitness_progress_pmx)
+                        
+                        # Timing stats
+                        # print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
+                        # print(f"PMX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
+                        # Visualization
+                        #visualize_row_based_design(shelves, 'PMX', rail=rail, terminals=terminals)
+                        #plot_fitness_progress(fitness_progress_pmx, "PMX")
+                        #queue_visualization(shelves, 'PMX')
+                    else:
+                        print("PMX is not enabled.")
+                    
+                    #=============================================MPMX==========================================================
+                    if MPMX_RUN:
+                        mpmx_placement_start_time = time.time()
+                        #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
+                        best_solution_mpmx, fitness_progress_mpmx = genetic_algorithm_mpmx(non_terminals, shelves, nets)
+                        mpmx_placement_end_time = time.time()
+                        
+                        filename = (subdir.name + "_MR" +
+                                    str(config['OPTIONS']['MUTATION_RATE']) +
+                                    "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
+                                    "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
+                                    "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_MPMX")
+                        
+                        # Save results to Excel
+                        save_results_to_excel(filename, subdir.name, 'MPMX', fitness_progress_mpmx[-1], mpmx_placement_end_time - mpmx_placement_start_time, fitness_progress_mpmx)
+                        
+                        # Timing stats
+                        #print(f"MPMX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
+                        # # Visualization
+                        # #visualize_row_based_design(shelves, 'MPMX')
+                        # #plot_fitness_progress(fitness_progress_mpmx)
+                        # queue_visualization(shelves, 'MPMX')
+                    else:
+                        print("MPMX is not enabled.")
+                
+                    #=============================================CSEX==========================================================
+                    if CSEX_RUN:
+                        csex_placement_start_time = time.time()
+                        #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
+                        best_solution_csex, fitness_progress_csex = genetic_algorithm_csex(non_terminals, shelves, nets)
+                        csex_placement_end_time = time.time()
+                        
+                        filename = (subdir.name + "_MR" +
+                                    str(config['OPTIONS']['MUTATION_RATE']) +
+                                    "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
+                                    "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
+                                    "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_CSEX")
+                        
+                        # Save results to Excel
+                        save_results_to_excel(filename, subdir.name, 'CSEX', fitness_progress_csex[-1], csex_placement_end_time - csex_placement_start_time, fitness_progress_csex)
+                        
+                        # Timing stats
+                        #print(f"CSEX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
+                        # Visualization
+                        #visualize_row_based_design(shelves, 'CSEX')
+                        #plot_fitness_progress(fitness_progress_csex, "CSEX")
+                        #queue_visualization(shelves, 'CSEX')
+                    else:
+                        print("CSEX is not enabled.")
+                    
+                    #=============================================PX==========================================================            
+                    if PX_RUN:
+                        px_placement_start_time = time.time()
+                        #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
+                        best_solution_px, fitness_progress_px = genetic_algorithm_px(non_terminals, shelves, nets)
+                        px_placement_end_time = time.time()
+                        
+                        filename = (subdir.name + "_MR" +
+                                    str(config['OPTIONS']['MUTATION_RATE']) +
+                                    "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
+                                    "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
+                                    "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_PX")
+                        
+                        # Save results to Excel
+                        save_results_to_excel(filename, subdir.name, 'PX', fitness_progress_px[-1], px_placement_end_time - px_placement_start_time, fitness_progress_px)
+                        
+                        # Timing stats
+                        #print(f"PX Placement runtime: {placement_end_time - placement_start_time:.2f}s")
+                    else:
+                        print("PX is not enabled.")
+                    
+                    print(f"========================== {subdir.name} ==========================\n")
+                    print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
+                    if PMX_RUN: print(f"PMX Placement runtime: {pmx_placement_end_time - pmx_placement_start_time:.2f}s") 
+                    else: None
+                    if MPMX_RUN: print(f"MPMX Placement runtime: {mpmx_placement_end_time - mpmx_placement_start_time:.2f}s")
+                    else: None
+                    if CSEX_RUN: print(f"CSEX Placement runtime: {csex_placement_end_time - csex_placement_start_time:.2f}s")  
+                    else: None
+                    if PX_RUN: print(f"PX Placement runtime: {px_placement_end_time - px_placement_start_time:.2f}s")
+                    else: None                    
+                    
+                    # # Visualization
+                    # visualize_row_based_design(shelves, 'PX')
+                    # # plot_fitness_progress(fitness_progress_px)
+                    # #queue_visualization(shelves, 'PX')
+                    # plot_fitness_progress(fitness_progress_pmx, "PMX")
+                    # plot_fitness_progress(fitness_progress_csex, "CSEX")
+                    # #plot_fitness_progress(fitness_progress_mpmx, "MPMX")
+                    # plot_fitness_progress(fitness_progress_px, "PX")
             
-            # Parsing files
-            parsing_start_time = time.time()
-            filenames = filenames_parser(subdirectory + aux_file)
-            modules = parse_nodes(subdirectory + nodes_file)
-            shelves = parse_shelves(subdirectory + shelves_file)
-            nets = parse_custom_nets(subdirectory + nets_file)
-            parsing_end_time = time.time()
-            
-            #=============================================PMX==========================================================
-            
-            if PMX_RUN:
-                # Starting placement
-                initial_HPWL = starting_placement(modules, shelves)
-                pmx_placement_start_time = time.time()
-                #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-                best_solution_pmx, fitness_progress_pmx = genetic_algorithm_pmx(modules, shelves, nets)
-                pmx_placement_end_time = time.time()
-                
-                filename = (subdir.name + "_MR" +
-                            str(config['OPTIONS']['MUTATION_RATE']) +
-                            "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
-                            "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
-                            "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_PMX")
-                
-                # Save results to Excel
-                save_results_to_excel(filename, subdir.name, 'PMX', fitness_progress_pmx[-1], pmx_placement_end_time - pmx_placement_start_time, fitness_progress_pmx)
-                
-                # Timing stats
-                # print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
-                # print(f"PMX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
-                # Visualization
-                #visualize_row_based_design(shelves, 'PMX')
-                #plot_fitness_progress(fitness_progress_pmx, "PMX")
-                #queue_visualization(shelves, 'PMX')
-            else:
-                print("PMX is not enabled.")
-            
-            #=============================================MPMX==========================================================
-            if MPMX_RUN:
-                mpmx_placement_start_time = time.time()
-                #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-                best_solution_mpmx, fitness_progress_mpmx = genetic_algorithm_mpmx(modules, shelves, nets)
-                mpmx_placement_end_time = time.time()
-                
-                filename = (subdir.name + "_MR" +
-                            str(config['OPTIONS']['MUTATION_RATE']) +
-                            "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
-                            "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
-                            "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_MPMX")
-                
-                # Save results to Excel
-                save_results_to_excel(filename, subdir.name, 'MPMX', fitness_progress_mpmx[-1], mpmx_placement_end_time - mpmx_placement_start_time, fitness_progress_mpmx)
-                
-                # Timing stats
-                #print(f"MPMX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
-                # # Visualization
-                # #visualize_row_based_design(shelves, 'MPMX')
-                # #plot_fitness_progress(fitness_progress_mpmx)
-                # queue_visualization(shelves, 'MPMX')
-            else:
-                print("MPMX is not enabled.")
-        
-            #=============================================CSEX==========================================================
-            if CSEX_RUN:
-                csex_placement_start_time = time.time()
-                #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-                best_solution_csex, fitness_progress_csex = genetic_algorithm_csex(modules, shelves, nets)
-                csex_placement_end_time = time.time()
-                
-                filename = (subdir.name + "_MR" +
-                            str(config['OPTIONS']['MUTATION_RATE']) +
-                            "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
-                            "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
-                            "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_CSEX")
-                
-                # Save results to Excel
-                save_results_to_excel(filename, subdir.name, 'CSEX', fitness_progress_csex[-1], csex_placement_end_time - csex_placement_start_time, fitness_progress_csex)
-                
-                # Timing stats
-                #print(f"CSEX Placement runtime: {placement_end_time - placement_start_time:.2f}s"
-                # Visualization
-                #visualize_row_based_design(shelves, 'CSEX')
-                #plot_fitness_progress(fitness_progress_csex, "CSEX")
-                #queue_visualization(shelves, 'CSEX')
-            else:
-                print("CSEX is not enabled.")
-            
-            #=============================================PX==========================================================            
-            if PX_RUN:
-                px_placement_start_time = time.time()
-                #mapping, letters_per_mapping = generate_string_mapping(modules_removed)
-                best_solution_px, fitness_progress_px = genetic_algorithm_px(modules, shelves, nets)
-                px_placement_end_time = time.time()
-                
-                filename = (subdir.name + "_MR" +
-                            str(config['OPTIONS']['MUTATION_RATE']) +
-                            "_ER" + str(config['OPTIONS']['ELITISM_RATE']) +
-                            "_POP" + str(config['OPTIONS']['POPULATION_SIZE']) +
-                            "_GEN" + str(config['OPTIONS']['GENERATIONS']) + "_PX")
-                
-                # Save results to Excel
-                save_results_to_excel(filename, subdir.name, 'PX', fitness_progress_px[-1], px_placement_end_time - px_placement_start_time, fitness_progress_px)
-                
-                # Timing stats
-                #print(f"PX Placement runtime: {placement_end_time - placement_start_time:.2f}s")
-            else:
-                print("PX is not enabled.")
-            
-            print(f"========================== {subdir.name} ==========================\n")
-            print(f"Parsing runtime: {parsing_end_time - parsing_start_time:.2f}s")
-            if PMX_RUN: print(f"PMX Placement runtime: {pmx_placement_end_time - pmx_placement_start_time:.2f}s") 
-            else: None
-            if MPMX_RUN: print(f"MPMX Placement runtime: {mpmx_placement_end_time - mpmx_placement_start_time:.2f}s")
-            else: None
-            if CSEX_RUN: print(f"CSEX Placement runtime: {csex_placement_end_time - csex_placement_start_time:.2f}s")  
-            else: None
-            if PX_RUN: print(f"PX Placement runtime: {px_placement_end_time - px_placement_start_time:.2f}s")
-            else: None                    
-            
-            # # Visualization
-            # visualize_row_based_design(shelves, 'PX')
-            # # plot_fitness_progress(fitness_progress_px)
-            # #queue_visualization(shelves, 'PX')
-            # plot_fitness_progress(fitness_progress_pmx, "PMX")
-            # plot_fitness_progress(fitness_progress_csex, "CSEX")
-            # #plot_fitness_progress(fitness_progress_mpmx, "MPMX")
-            # plot_fitness_progress(fitness_progress_px, "PX")
-    
-    # After the algorithm is done
-    #process_visualizations()
+            # After the algorithm is done
+            #process_visualizations()
     join_excel_files()
