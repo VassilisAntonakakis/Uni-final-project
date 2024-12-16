@@ -1,3 +1,7 @@
 *.xlsx
 *.rar
 *.zip
+*.ipynb
+*.jpg
+*.png
+*.drawio
